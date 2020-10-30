@@ -1,0 +1,3 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+MinimalRides = "22e11959-74d5-4147-9c6f-08cd49ebc7f1"
