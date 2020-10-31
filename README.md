@@ -5,3 +5,5 @@
 [![Build Status](https://github.com/Arkoniak/MinimalRides.jl/workflows/CI/badge.svg)](https://github.com/Arkoniak/MinimalRides.jl/actions)
 [![Build Status](https://travis-ci.com/Arkoniak/MinimalRides.jl.svg?branch=master)](https://travis-ci.com/Arkoniak/MinimalRides.jl)
 [![Coverage](https://codecov.io/gh/Arkoniak/MinimalRides.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/Arkoniak/MinimalRides.jl)
+
+Пример использования: notebooks/Rides Minimal Example.ipynb

@@ -3,6 +3,14 @@ uuid = "22e11959-74d5-4147-9c6f-08cd49ebc7f1"
 authors = ["Andrey Oskin"]
 version = "0.1.0"
 
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Geodesy = "0ef565a4-170c-5f04-8de2-149903a85f3d"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
+TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
+ZipFile = "a5390f91-8eb1-5f08-bee0-b1d1ffed6cea"
+
 [compat]
 julia = "1.3"
 
