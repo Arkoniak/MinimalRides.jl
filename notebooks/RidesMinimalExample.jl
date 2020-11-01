@@ -11,7 +11,7 @@ RAW_DATA_URL_UPDATED = ("https://dl.dropboxusercontent.com" *
     "/data_samples-json2.zip")
 CACHE_DATA = "/media/win/Data/data_samples-json2.zip"
 
-rides = MinimalRides.download(RAW_DATA_URL_UPDATED, CACHE_DATA);
+rides = MinimalRides.load(RAW_DATA_URL_UPDATED, CACHE_DATA);
 
 DAYS = Date.(["2020-05-21"])
 TYPES = [:freight]

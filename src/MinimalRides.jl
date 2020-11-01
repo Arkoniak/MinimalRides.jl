@@ -11,12 +11,16 @@ using JSON3
 # Structures
 ########################################
 
-struct Location
+struct Location{T}
     ts::Int
-    coord::LatLon{Float64}
+    coord::T
 end
 
-Location(v::AbstractVector) = Location(v[1], LatLon(v[3], v[2]))
+Location{LatLon{T}}(v::AbstractVector) where T = Location{LatLon{Float64}}(v[1], LatLon{Float64}(v[3], v[2]))
+Location(v::AbstractVector{T}) where T = Location{LatLon{T}}(v[1], LatLon{Float64}(v[3], v[2]))
+Location{ECEF}(v::AbstractVector{T}, datum = wgs84) where T = Location{ECEF{T}}(v[1], ECEF(LLA(LatLon(v[3], v[2])), datum))
+Location{ECEF{T}}(v::AbstractVector, datum = wgs84) where T = Location{ECEF{T}}(v[1], ECEF(LLA(LatLon(v[3], v[2])), datum))
+Location{ECEF}(l::Location{LatLon{T}}, datum = wgs84) where T = Location{ECEF{T}}(l.ts, ECEF(LLA(l.coord), datum))
 
 const GEO_RADIUS = 6371.009
 
@@ -36,7 +40,8 @@ function great_circle(p1::LatLon, p2::LatLon)
 end
 
 # this definition twice as fast as native Geodesy version `distance(l1.coord, l2.coord)`
-distance(l1::Location, l2::Location) = great_circle(l1.coord, l2.coord)
+distance(l1::Location{T}, l2::Location{T}) where {T <: LatLon} = great_circle(l1.coord, l2.coord)
+distance(l1::Location{T}, l2::Location{T}) where {T <: ECEF} = @inbounds (l1.coord[1] - l2.coord[1])^2 + (l1.coord[2] - l2.coord[2])^2 + (l1.coord[3] - l2.coord[3])^2
 # distance(l1::Location, l2::Location) = distance(l1.coord, l2.coord)
 
 struct Info
@@ -83,26 +88,37 @@ function Info(car)
     )
 end
 
-struct Ride
+struct Ride{T}
     info::Info
-    route::Vector{Location}
+    route::Vector{Location{T}}
 end
 Base.getindex(ride::Ride, i) = @inbounds ride.route[i]
 Base.length(ride::Ride) = length(ride.route)
 Base.lastindex(ride::Ride) = length(ride)
 
 function Ride(ride)
-    Ride(
+    Ride{LatLon{Float64}}(
         Info(ride.info),
-        sort!(Location.(ride.data), by = x -> x.ts)
+        sort!(Location{LatLon{Float64}}.(ride.data), by = x -> x.ts)
     )
+end
+
+function Ride{ECEF}(ride, datum = wgs84)
+    Ride{ECEF{Float64}}(
+        Info(ride.info),
+        sort!(Location{ECEF{Float64}}.(ride.data, datum), by = x -> x.ts)
+    )
+end
+
+function Ride{ECEF}(ride::Ride{LatLon{T}}, datum = wgs84) where T
+    Ride{ECEF{T}}(ride.info, Location{ECEF}.(ride.route))
 end
 
 ########################################
 # Download utility functions
 ########################################
 
-function download(url, cache, force = false)
+function load(url, cache, force = false)
     if !isfile(cache) | force
         @info "Downloading rides from $(url)"
         download(url, cache)
@@ -117,7 +133,7 @@ function download(url, cache, force = false)
         push!(res, Ride(JSON3.read(v)))
     end
     close(r)
-    return res
+    return identity.(res)
 end
 
 ########################################
@@ -129,13 +145,22 @@ function make_subset(rides, days, types)
 end
 
 mileage(ride::Ride) = mileage(ride.route)
-function mileage(route::AbstractVector{Location})
-    res = 0.
+function mileage(route::AbstractVector{Location{LatLon{T}}}) where T
+    res = zero(T)
     @inbounds @simd for i in 2:length(route)
         res += distance(route[i - 1], route[i])
     end
 
     return res
+end
+
+function mileage(route::AbstractVector{Location{ECEF{T}}}) where T
+    res = zero(T)
+    @inbounds @simd for i in 2:length(route)
+        res += sqrt(distance(route[i - 1], route[i]))
+    end
+
+    return res/1000
 end
 
 ########################################
@@ -148,12 +173,31 @@ struct DistanceSmoothing <: SmoothAlgorithm
     r::Float64
 end
 
-function smooth(alg::DistanceSmoothing, ride)
+function smooth(alg::DistanceSmoothing, ride::Ride{T}) where {T <: LatLon}
     r = alg.r
     segment = 0.
     route = [ride[1]]
     for i in 2:length(ride)
         segment += distance(ride[i - 1], ride[i])
+        if segment >= r
+            segment = 0.
+            push!(route, ride[i])
+        end
+    end
+
+    if ride[end] != route[end]
+        push!(route, ride[end])
+    end
+
+    return Ride(ride.info, route)
+end
+
+function smooth(alg::DistanceSmoothing, ride::Ride{T}) where {T <: ECEF}
+    r = alg.r*1000
+    segment = 0.
+    route = [ride[1]]
+    for i in 2:length(ride)
+        segment += sqrt(distance(ride[i - 1], ride[i]))
         if segment >= r
             segment = 0.
             push!(route, ride[i])
@@ -185,9 +229,28 @@ end
 # Coverage and Results
 ########################################
 
-function coverage(ride1::Ride, ride2::Ride, radius)
+function coverage(ride1::Ride{T}, ride2::Ride{T}, radius) where {T <: LatLon}
     dist1 = fill(Inf, length(ride1))
     dist2 = fill(Inf, length(ride2))
+
+    @inbounds for i in 1:length(ride1)
+        for j in 1:length(ride2)
+            d = distance(ride1[i], ride2[j])
+            dist1[i] = d < dist1[i] ? d : dist1[i]
+            dist2[j] = d < dist2[j] ? d : dist2[j]
+        end
+    end
+
+    cov1 = sum(<(radius), dist1)/length(ride1)
+    cov2 = sum(<(radius), dist2)/length(ride2)
+
+    return (;cov1, cov2)
+end
+
+function coverage(ride1::Ride{T}, ride2::Ride{T}, radius) where {T <: ECEF}
+    dist1 = fill(Inf, length(ride1))
+    dist2 = fill(Inf, length(ride2))
+    radius = (radius * 1000.0)^2
 
     @inbounds for i in 1:length(ride1)
         for j in 1:length(ride2)
