@@ -2,7 +2,7 @@ using Revise
 using Geodesy
 using MinimalRides
 using Dates
-using MinimalRides: make_subset, DistanceSmoothing, results, mileage, smooth
+using MinimalRides: make_subset, DistanceSmoothing, results, mileage, smooth, load_raw, Ride
 using DataFrames
 using Underscores
 using BenchmarkTools
@@ -53,6 +53,13 @@ using BenchmarkTools
 #   evals/sample:     1000
 
 ########################################
+# JSON load test
+########################################
+url = "https://github.com/epogrebnyak/rides-minimal/blob/master/sample_jsons/sample_jsons.zip?raw=true"
+cache = "/tmp/sample_json.zip"
+load_raw(url, cache);
+
+########################################
 # LatLon to ECEF conversion
 ########################################
 RAW_DATA_URL_UPDATED = ("https://dl.dropboxusercontent.com" *
@@ -60,8 +67,10 @@ RAW_DATA_URL_UPDATED = ("https://dl.dropboxusercontent.com" *
     "/data_samples-json2.zip")
 CACHE_DATA = "/media/win/Data/data_samples-json2.zip"
 
-rides = MinimalRides.load(RAW_DATA_URL_UPDATED, CACHE_DATA);
-rides_ecef = MinimalRides.Ride{ECEF}.(rides)
+rides = load_raw(RAW_DATA_URL_UPDATED, CACHE_DATA) .|> Ride;
+rides_ecef = Ride{ECEF}.(rides);
+
+@benchmark MinimalRides.Ride{ECEF}.($rides)
 
 DAYS = Date.(["2020-05-21"])
 TYPES = [:freight]

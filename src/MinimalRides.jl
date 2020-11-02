@@ -5,7 +5,32 @@ using Geodesy
 using TimeZones
 using ZipFile
 using ProgressMeter
+using CSV
 using JSON3
+using StructTypes
+
+include("animals.jl")
+
+########################################
+# JSON patch
+########################################
+
+struct JSONInfo
+    id::String
+    car_id::String
+    category::String
+    car_passengers::Int
+    cat_carry_weight::Int
+    start_dt::String
+    end_dt::String
+end
+
+struct JSONRide
+    info::JSONInfo
+    data::Vector{Vector{Float64}}
+end
+StructTypes.StructType(::Type{JSONInfo}) = StructTypes.Struct()
+StructTypes.StructType(::Type{JSONRide}) = StructTypes.Struct()
 
 ########################################
 # Structures
@@ -88,6 +113,19 @@ function Info(car)
     )
 end
 
+function Info(info::JSONInfo)
+    Info(
+        info.id,
+        info.car_id,
+        info.category,
+        info.car_passengers,
+        info.cat_carry_weight,
+        car_type(info),
+        ZonedDateTime(info.start_dt, dateformatter()),
+        ZonedDateTime(info.end_dt, dateformatter())
+    )
+end
+
 struct Ride{T}
     info::Info
     route::Vector{Location{T}}
@@ -117,6 +155,26 @@ end
 ########################################
 # Download utility functions
 ########################################
+
+function load_raw(url, cache, force = false)
+    if !isfile(cache) | force
+        @info "Downloading rides from $(url)"
+        download(url, cache)
+    end
+
+    res = JSONRide[]
+
+    r = ZipFile.Reader(cache)
+    @info "Processing $(length(r.files)) rides from $(cache)"
+    @showprogress for f in r.files
+        v = Vector{UInt8}(undef, f.uncompressedsize)
+        read!(f, v)
+        push!(res, JSON3.read(v, JSONRide))
+    end
+    close(r)
+
+    return res
+end
 
 function load(url, cache, force = false)
     if !isfile(cache) | force
