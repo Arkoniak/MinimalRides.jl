@@ -1,7 +1,7 @@
 name = "MinimalRides"
 uuid = "22e11959-74d5-4147-9c6f-08cd49ebc7f1"
 authors = ["Andrey Oskin"]
-version = "0.1.1"
+version = "0.1.2"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
